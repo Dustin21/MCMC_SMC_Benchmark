@@ -1,0 +1,286 @@
+\documentclass[12pt]{elsarticle}
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{lineno}
+\usepackage{amsmath} 
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\DeclareMathOperator{\E}{\mathbb{E}}
+
+%opening
+\journal{STAT 520A}
+
+\begin{document}
+	
+\begin{frontmatter}
+\title{A Benchmarking comparison of MCMC and SMC Samplers}
+\author{Jason Hartford - 81307143 \\ Dustin Johnson - 11338118}
+
+\begin{abstract}
+In this paper, we compare and contrast Markov Chain Monte Carlo (MCMC) and Sequential Monte Carlo (SMC) samplers based on their performance and efficiency under a series of artificial density functions. The increasing distributional complexity of Bayesian modelling has necessitated improvements in the efficiency and performance of sampling methods.  The purpose of the report is to determine preference of one method over the other through experiments on artificial density functions of varying dimensions. The algorithms are implemented and benchmarked in the language Julia, a rather new scientific computing language with demonstrated potential for statistical computing.
+\end{abstract}
+
+\begin{keyword}
+MCMC \sep SMC Samplers \sep Bayesian Analysis \sep Julia
+\end{keyword}
+
+\end{frontmatter}
+
+
+
+\section*{Introduction}
+Markov Chain Monte Carlo (MCMC) is a favoured tool for statisticians when sampling from complex distributions. The algorithm constructs an ergodic Markov chain with an invariant distribution through Metropolis-Hasting (MH) steps, which allows it to explore high dimensional space relatively efficiently. As a result, MCMC has become the standard sampling technique that has enabled Bayesian statistics to evolve and be applied to increasingly complex and higher dimensional problems. However, MCMC has been shown to get stuck in local modes and difficulty arises when assessing whether the Markov chain has truly reached its stationary distribution. In addition, the full joint distribution must be evaluated each time a new variable is added, which is infeasible under a sequential context. \\
+
+Escalating interest in Bayesian modeling has increased the complexity of the posterior distributions, where multiple modes in high dimensional space are common. This complexity motivated improvements in sampling techniques that provide better performance and computational efficiency. Sequential Monte Carlo (SMC) Samplers offer an alternative to MCMC using an approach which shifts samples from a tractable starting distribution, $\pi_1$, to the intractable distribution of interest, $\pi_n$, via a series of intermediate distributions. \\
+
+This report makes two contributions. It tests the performance of both samplers on a variety of multi-modal distributions, and it tests the usefulness of a new scientific computing language, Julia, in the context of Bayesian inference. Julia is potentially very useful for Bayesian statistics as it claims to offer high-level Matlab-style syntax but without compromising on the loop speed. As samplers rely heavily on loops, having access to fast loops is essential for a language to be useful.\\
+
+In the sections to follow, we will provide a brief outline of MCMC and SMC Samplers, then compare and contrast their performance under a series of experiments with artificial density functions of varying dimensions.
+
+\section*{Markov Chain Monte Carlo (MCMC)}
+MCMC accomplishes the task of approximating the area of an unknown distribution by moving through the space of the joint distribution by a series of carefully taken steps. Each ``chain" of steps is an MCMC sampler if they are ergodic Markov chains (irreducible and aperiodic) that have the target distribution as the invariant distribution.  We will focus on the most popular MCMC method, called the Metropolis-Hastings (MH) algorithm. Most other MCMC methods can be viewed as special cases of this algorithm \cite{Andrieu2003}. \\
+
+Let $x'$ be the proposal candidate for the next step of the Markov chain, which is drawn from the proposal distribution denoted $q(x'|x)$, where $x$ is our current point. This proposal is then accepted as the next step in the Markov chain according to the probability $\alpha(x,x')$, where 
+
+\[
+\alpha(x,x') = \min{\left[1, \frac{\pi(x') q(x|x')}{\pi(x)q(x'|x)}\right]} \quad (1)
+\].
+
+If the proposal candidate is rejected, then the next sampled value is taken to be the current value. We iterate this process until some form of convergence is reached (see section Convergence Benchmarks). Typically, a Markov chain takes a number of steps from the initial point before reasonably traversing the area and converging to the invariant distribution, so a sequence of the initial steps is discarded called the ``burn-in" period. It is important to note that the target density appears as a ratio in the probability $ \alpha(x,x')$ and therefore the algorithm can be implemented without the normalizing constant $Z = \int \mathcal{L}(x|\theta)\pi(\theta)$ inherent in a Bayesian framework.
+
+\section*{Sequential Monte Carlo (SMC) Samplers}
+
+Sequential Monte Carlo (SMC) Samplers adapts the Sequential Monte Carlo approach used in sequential Bayesian inference to the static distribution setting where all observations are from a common space. The SMC Sampler requires no burn-in period, and can be computed parallel for computational efficiency, unlike the traditional MCMC method, making it well-suited for Bayesian analysis \cite{Bishop2007}. \\
+
+SMC Samplers use a combination of sequential importance sampling and resampling steps to sample shift particles from an easy distribution to the target distribution. They perform importance sampling on extended space $E^n$ by introducing a sequence of extended probability distributions $\tilde{\pi}_n$ through the use of artificial backward Markov kernels $L_k(x_{k+1},x_k)$ as follows:
+
+\[
+\tilde{\pi}_n(x_{1:n}) = \frac{\tilde{\gamma}_n(x_{1:n})}{Z_n}
+\]
+
+where 
+
+\[
+\tilde{\gamma}_n(x_{1:n}) = \gamma_n(x_n) \prod_{k=1}^{n-1} L_k(x_{k+1},x_k)
+\]
+
+We are now able to use Importance Sampling (IS) without having to compute the importance distribution $\eta_n(x_n)$, and hence perform IS between the joint importance distribution $\eta_n(x_{1:n})$ and artificial joint target distribution $\tilde{\pi}_n$. Provided we have a set of weighted particles $\{W_{n-1}^{(i)}, X_{1:n-1}^{(i)}\}_{i=1}^N$ approximating $\tilde{\pi}_{n-1}$,
+
+\[
+W_n^{(i)} \propto \frac{\tilde{\pi}_n(x_{1:n})}{\eta_n(x_{1:n})} \propto w_n(x_{n-1}^{(i)}, x_n^{(i)})W_{n-1}^{(i)} \quad (2)
+\]
+
+where the incremental weights are computed as
+
+\[
+w_n(x_{n-1}^{(i)}, x_n^{(i)}) = \frac{\gamma_n^{(i)}L_{n}(x_{n-1}^{(i)}, x_{n-1}^{(i)})}{\gamma_{n-1}(x_{n-1}^{(i)}) K_n(x_{n-1}^{(i)}, x_n^{(i)})}
+\]
+
+$K_n(x_{n-1}^{(i)}, x_n^{(i)})$ is a $\pi_n$ invariant Markov kernel. A common issue with SMC Samplers is that the ratio $\frac{\tilde{\pi}_n(x_{1:n})}{\eta_n(x_{1:n})}$ in (2) increases with $n$, which causes the particle approximation to degenerate. Using a measure called the Effective Sample Size (ESS), we can impose a threshold, that if surpassed, activates a re-sample of the particles at that time. Altogether, for each $i = 1, \dots, N$ we sample $x_n^{(i)} \sim K_n(x_{n-1}^{(i)}, .)$, compute the weights $W_n^{(i)}$, normalise the weights $\tilde{W}_n^{(i)} = W_n^{(i)}[\sum_{j=1}^N W_n^{(j)}]^{-1}$, and continue for ESS less then some threshold, otherwise re-sample \cite{DelMoral2005}.
+
+\subsection*{Annealing}
+SMC Samplers use a sequence of distributions $\{\pi_n\}_{n\in \mathbb{T}}$ to move particles around the outcome space. The there are a wide variety of potential choices for this sequence depending on the application. For this project we use a simple annealing strategy to anneal from a distribution from which it is easy to sample, to the distribution of interest. Our sequence of distributions is constructed as follows,
+\[
+\pi_n(x) \propto [\mu(x)]^{\alpha_n}  [\pi(x)]^{1-\alpha_n}
+\]
+where $\pi(x)$ is a Gaussian and $\mu(x)$ is our target distribution. Figure \ref{annealing} visualises this approach. With $\alpha = 0.0$, we sample from a Gaussian, but as we increase the temperature to $\alpha = 1$ we sample from a more complex multimodal distribution.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+       \includegraphics[width = \textwidth, trim = 3cm 11.7cm 1cm 0.5cm, clip]{plots/Annealing-Normalised/Normalised-Mix-Gaussian-anealing-animation0_00.png}
+               \caption{$\alpha = 0.0$}
+        \label{fig:y equals x}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+        \includegraphics[width = \textwidth, trim = 3cm 11.7cm 1cm 0.5cm, clip]{plots/Annealing-Normalised/Normalised-Mix-Gaussian-anealing-animation0_30.png}
+        \caption{$\alpha = 0.3$}
+        \label{fig:three sin x}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+       \includegraphics[width = \textwidth, trim = 3cm 11.7cm 1cm 0.5cm, clip]{plots/Annealing-Normalised/Normalised-Mix-Gaussian-anealing-animation0_70.png}
+        \caption{$\alpha = 0.7$}
+        \label{fig:five over x}
+    \end{subfigure}
+    \hfill
+        \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+       \includegraphics[width = \textwidth, trim = 3cm 11.7cm 1cm 0.5cm, clip]{plots/Annealing-Normalised/Normalised-Mix-Gaussian-anealing-animation1_00.png}
+        \caption{$\alpha = 1.0$}
+        \label{fig:five over x}
+    \end{subfigure}
+    \caption{Annealing from an easy distribution to a difficult distribution with two dimensional support.}
+    \label{annealing}
+\end{figure}
+
+\section*{Convergence Benchmarks}
+As this paper is dedicated to the comparison of MCMC and SMC Samplers, we need to identify some form of convergence to benchmark the two methods. Detection of convergence in sampling remains a difficult problem.  There are a variety of heuristics to test for non-convergence, such as examining the trace plots for ``choppy" performance that results from the sampler getting stuck in a local mode, or comparing the trace plots from over dispersed starting points to confirm that they converge to the same stationary distribution. However, this remains an inexact science.\\
+
+To avoid this we focused on sampling from a multimodal distribution that was integrable via symbolic integration techniques. This allowed us to compare the convergence of the two samplers to their true values. The one dimensional experiments used the function shown in Figure \ref{function}. It is an arbitrary mixture of Gaussian distributions, chosen because it is multimodal and integrable via symbolic integration. \\
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/function.png}
+\caption{Distribution of interest}
+\label{function}
+\end{center}
+\end{figure}
+
+\noindent
+We focused on three metrics in assessing the performance:
+\begin{itemize}
+\item Mean absolute error (MAE) by number of particles. 
+\item Mean absolute error (MAE) by wall time. 
+\item Number of particles until convergence to within 2\% of the true value. 
+\end{itemize}
+
+To understand the metrics, consider Figure \ref{convergence} which shows a typical run of the two samplers where we are trying to estimate the mean of the function shown in Figure \ref{function}. The absolute value of the error is large for both samplers within the first 10 000 iterations, before converging to within 2\% of the true value. In this particular run, the SMC Sampler converged far quicker than the MCMC sampler, but each run is quite sensitive to the random seeds used. To avoid this, we average the absolute error over 50 experiments. \\
+
+By considering the performance relative to the number particles, we overstate the performance of the SMC Sampler because it takes far longer to generate the particles (as it has to anneal the samples). To address this computational constraint, we also compare performance relative to average wall time. Again, we average the wall time over all 50 experiments to smooth minor variances over individual runs. \\
+
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/Convergence.png}
+\caption{Converge of a single run of MCMC and SMC. In this run SMC converged to within 2\% of the true value after 35 717 iterations and MCMC converged after 226 887 iterations (indicated by the red vertical lines)}
+\label{convergence}
+\end{center}
+\end{figure}
+
+Finally, by considering average performance over 50 runs, we potentially miss poor performing random draws. To understand tail performance, we consider the number of particles sampled before the chain stays within 2\% of the true value. In Figure  \ref{convergence}, for example, the MCMC estimate of the mean is within 2\% of the true value frequently within the first 1 000 iterations, but only stays within the bound for the remainder of the run after 226 887 iterations. In practice, it may be too expensive to run 50 experiments, so we would like to be confident that we have converged to the true value after a given number of iterations. To capture this we also examine the number of iterations before stabilising within 2\% of the true value for each run.
+
+
+\section*{Results}
+
+\subsection*{MAE by number of particles}
+Figure \ref{ex} shows the average performance of MCMC and SMC Samplers in estimating the $E[x]$. The performance of both algorithms mostly levels off after 200 000 iterations, but SMC Samplers consistently show smaller average error when compared to MCMC. 
+
+This trend is accentuated in Figure \ref{ex2} where we are estimating $E[x^2]$. Here there is a large gap in performance between the two algorithms. In this case, SMC typically converges to a tight error far quicker than MCMC.
+
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/E_X.png}
+\caption{Performance by number of particles of the two samplers in estimating the mean.}
+\label{ex}
+\end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/E_X2.png}
+\caption{Performance by number of particles of the two samplers in estimating $E[x^2]$.}
+\label{ex2}
+\end{center}
+\end{figure}
+
+
+\subsection*{MAE by wall time}
+
+While the results of Figure \ref{ex} and \ref{ex2} appear to favour SMC, the story is complicated when one takes wall-time into account. Each SMC sample is the result of $p$ steps of annealing (where $p=5$ in these experiments) and thus is on average approximately $p$ times more expensive to compute. \\
+
+This is clearly illustrated by Figures \ref{walltime_ex} and  \ref{walltime_ex2}. In Figure \ref{walltime_ex}, each of the 50 MCMC runs took approximately $2.5$ seconds to complete while the SMC runs took 10 seconds. For the simple mean estimate, this additional time bought very little benefit in terms of accuracy. That said, notice that at every point in time the SMC error rate is very similar to that of the MCMC sampler. Similarly, in Figure \ref{walltime_ex2}, the average performance of the SMC Sampler closely matched that of the MCMC sampler in their estimate $E[x^2]$. \\
+
+This suggests that in practice one could sample fewer particles using the SMC Sampler to achieve similar performance to MCMC. While this allows SMC to match MCMC's performance, it does not show a clear advantage in simple one dimensional cases.
+
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/E_X_walltime.png}
+\caption{Performance by number of particles of the two samplers in estimating the mean by the average amount of time taken in seconds}
+\label{walltime_ex}
+\end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/E_X2_walltime.png}
+\caption{Performance by number of particles of the two samplers in estimating $E[x^2]$ by the average amount of time taken in seconds}
+\label{walltime_ex2}
+\end{center}
+\end{figure}
+
+\subsection*{Number of particles until convergence }
+
+The clearest difference between the performance of MCMC and SMC Samplers is shown in Figures \ref{fig:itersEX} and \ref{fig:itersEX2}. There were a significant number of MCMC runs that only converged to within 2\% of the true value after 200 000 iterations, while in most cases SMC had converged to within 2\% of the true value with fewer than 100 000 particles. \\ 
+
+While this result can partially inferred from the earlier accuracy results, it has important implications. In practice, one would not know the true value of the parameter, so if accuracy is a priority, it would be concerning that there is a nontrivial probability that MCMC may take over 200 000 iterations to converge for a 1D distribution.  That said, its cheaper iterations are a benefit in this regard as practitioners may simply run the chain for longer to achieve desired levels of accuracy.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/iterations.pdf}
+\caption{The number of iterations before the sampler converged to within $2\%$ of the true value in each of 50 experiments.}
+\label{fig:itersEX}
+\end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/iterationsEx2.pdf}
+\caption{The number of iterations before the sampler converged to within $2\%$ of the true value in each of 50 experiments.}
+\label{fig:itersEX2}
+\end{center}
+\end{figure}
+
+\subsection*{Multivariate sampling}
+To test performance in higher dimensions we followed the same approach of building a multimodal distribution that we could still integrate using symbolic integration. To do this, we built a function of the following form,
+
+\[
+f(x_i) = \prod_i \sum_j w_{ij} \exp(-(x_i - \mu_{ij})^2/2s_{ij})
+\]
+
+where $w_ij$, $\mu_ij$ and $s_{ij}$ were sampled randomly with a fixed seed. This allowed us to build multimodal functions in arbitrarily high dimensional spaces. However, in order integrate symbolically and keep CPU time manageable, we limited our experiments to two dimensions. \\
+
+Figure \ref{multi_particles} plots the mean absolute error by the number of particles used. Here the annealing steps taken by the SMC Sampler show their utility. It achieves far lower error rates and consistently outperforms MCMC across the range of particles. \\
+
+This improved performance does come at the expense of longer wall time, but as Figure $\ref{multi_walltime}$ demonstrates, most of the error reduction is achieved in the first 0.2 seconds and at every time step, the SMC Sampler outperforms MCMC on this example.
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/2d-errors.png}
+\caption{Performance by number of particles of the two samplers in estimating $E[x_1^2 + x_2^2]$}
+\label{multi_particles}
+\end{center}
+\end{figure}
+
+\begin{figure}[htbp]
+\begin{center}
+\includegraphics[width = \textwidth]{plots/2d-errors_walltime.png}
+\caption{Performance by number of particles of the two samplers in estimating $E[x_1^2 + x_2^2]$ by the average amount of time taken in seconds}
+\label{multi_walltime}
+\end{center}
+\end{figure}
+
+
+
+
+\section*{Concluding Remarks}
+This report benchmarked the performance of MCMC and SMC Samplers on a series of multimodal density functions with varying dimensions. The purpose of this comparison is to identify which sampler outperforms the other in terms of computational feasibility and convergence error. The results suggest that SMC Samplers typically converge to the quantities of interest using fewer particles than MCMC. Performance relative to wall time is mixed, as the SMC Samplers are slower per particle sampled but typically make up for it in improved accuracy. As a result, our results suggest that if accuracy per unit time is of interest, then SMC's benefit is greater in higher dimension than in one dimensional distributions\\
+
+The secondary goal of this project was to assess the usefulness of Julia in a Bayesian context. While we did not compare Julia directly to other languages, each of the experiments in this project sampled at least 1 million particles (more in the case of SMC), and were conducted on very modest computing hardware (a four year old 1.8 GHz Intel Core i7 Macbook Air with 4GB RAM), which suggests that the language is certainly fast enough to be useful. In addition, its support for functional style programming makes for concise readable code that closely matches the pseudo-code given in the original papers. This makes it useful for those new to computational statistics as it hides the complexity of more low level programming languages such as C$++$ or Java. All code used in this project can be viewed at \url{https://github.com/jhartford/BenchmarkingProject}.\\
+
+\subsection*{Further Investigation}
+Computational resources and time limited this project to low dimensional distributions, but the code written generalises trivially to far higher dimensions. Thus, an obvious extension is would be to test performance of the samplers on tens or hundreds of dimensions.\\
+
+Additionally, there are  many interesting questions relating to sampling of nonparametric Bayesian models were left unanswered. The growing interest in nonparametric Bayesian analysis has lead to increasing demands for high-performing samplers for posterior estimation, therefore providing an intriguing setting to benchmark the SMC and MCMC samplers. Resources outlining MCMC methodologies in various applied settings are plentiful, but little investigation has been conducted with the much newer SMC Samplers. Further areas of research into various applications may find SMC Samplers to be highly valuable in scenarios where complex, multi-modal distributions pose a difficulty for the conventional MCMC.\\
+
+
+\section*{References}
+%\bibliographystyle{model1-num-names}
+\nocite{Bishop2007}
+\nocite{Murphy2012}
+\nocite{Lindsten2014}
+\nocite{Andrieu2003}
+\bibliographystyle{unsrt}
+\bibliography{refs}
+
+
+\end{document}

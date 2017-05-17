@@ -1,0 +1,54 @@
+\documentclass[11pt, oneside]{amsart}
+\usepackage{geometry}                % See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage{enumitem}
+\usepackage{epstopdf}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage[]{mcode}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\prox}{prox}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\diag}{diag}
+\DeclareMathOperator*{\Lap}{Lap}
+\DeclareMathOperator*{\E}{E}
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+\title{STAT 520 - Project Proposal}
+\author{Jason Hartford - 81307143 \\
+Dustin Johnson - 11338118}
+%\date{}                                           % Activate to display a given date or no date
+
+\begin{document}
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\section{Outline}
+
+Markov Chain Monte Carlo (MCMC) has become the standard sampling tool that has enabled Bayesian statistics to evolve and be applied to complex and high dimensional models. Probabilistic programming languages such as JAGS, BUGS, and Stan have readily integrated MCMC into a ``black-box" declarative structure, making Bayesian models easy to fit without the need to implement samplers. However, MCMC often requires a large number of samples to explore the space of possible outcomes, and the algorithm may get ``stuck" in modes of high probability.
+
+Sequential Monte Carlo (SMC) Samplers \cite{DelMoral2005} offer a more computationally efficient alternative to MCMC using an approach which shifts samples from a tractable starting distribution, $\pi_1$, to the intractable distribution of interest, $\pi_n$, via a series of intermediate distributions. The downside of this approach is that it requires the practitioner to not only consider the distribution of interest, $\pi_n$, but also the preceding sequence of distributions $\pi_{1:n}$. This tradeoff between ease of use for practitioners and computational efficiency naturally leads to the questions of how much benefit  SMC Samplers provide over the traditional MCMC methods?
+
+To test this we plan to benchmark the performance of MCMC against SMC Samplers in fitting typical Bayesian models. We plan to test hierarchical and mixture models, as well as clustering using non-parametric models.  We plan to us both samplers to fit a Dirichlet Process mixture model on a simulated dataset with know numbers of clusters. This will allow us to evaluate speed of convergence over variations in the number of data points, the dimensionality of the data and the number of clusters. The Hierarchical Bayesian model will model incidents of crime in Vancouver by considering the types of crimes that occur and the regions in which they occur.
+
+In order to standardise performance across programming languages, we will implement both samplers ourselves. For the project, we plan to use Julia, a relatively new technical computing programming language which offers two major advantages: the language claims to give performance comparable with statically typed languages like C; and to our knowledge there is currently no implementation of SMC Samplers in Julia. Thus in addition to the benchmarking goal, this project will hopefully provide a fast implementation of SMC Samplers that will be useful in future work.
+
+%%% Not sure if we need this bit:
+%To test clustering performance we will experiment using both samplers to fit a Dirichlet Process mixture model on a simulated dataset with know numbers of clusters. This will allow us to evaluate speed of convergence over variations in the number of data points, the dimensionality of the data and the number of clusters. The Hierarchical Bayesian model will model incidents of crime in Vancouver by considering the types of crimes that occur and the regions in which they occur.
+
+% MCMC - Metro Hasting
+% MCMC - Gibbs
+% 
+\nocite{Bishop2007}
+\nocite{Murphy2012}
+\nocite{Lindsten2014}
+\bibliographystyle{unsrt}
+\bibliography{refs}
+
+\end{document}  
